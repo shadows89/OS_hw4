@@ -10,20 +10,23 @@
 #include <linux/fcntl.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
+#include <asm/semaphore.h>
 
 #include "hw4.h"
-
-#define MY_MODULE "MY_MODULE"
+#define MY_MODULE "hw4"
+#define BUF_SIZE 4096
 
 MODULE_LICENSE( "GPL" );
-MODULE_AUTHOR( "Leonid Raskin" );
 
 int iNumDevices = 0;
-MODULE_PARM( iNumDevices, "i" );
+MODULE_PARM( iKey, "i" );
 
 /* globals */
-int my_major = 0; 			/* will hold the major # of my device driver */
-
+int my_major = 0; 			    /* will hold the major # of my device driver */
+char buffer[BUF_SIZE];          /* will hold buffer for device */
+int first_byte_writen = 0;      /* index of first byte writen to buffer */
+int last_byte_writen = 0;       /* index of last byte writen to buffer */
+sem_t sem;                      /* semaphore to lock the module */
 
 struct file_operations my_fops = {
 	.open=		my_open,
@@ -49,11 +52,14 @@ struct file_operations my_fops2 = {
 int init_module( void ) {
 	my_major = register_chrdev( my_major, MY_MODULE, &my_fops );
 	if( my_major < 0 ) {
-		printk( KERN_WARNING "can't get dynamic major\n" );
 		return my_major;
 	}
-
 	//do_init();
+	if(seminit(&sem, 0, 1) != 0){    /* binary semaphore */
+		unregister_chrdev( my_major, MY_MODULE);
+		return -1;
+	}
+	printk("HELLO!\n");
 	return 0;
 }
 
@@ -63,7 +69,8 @@ void cleanup_module( void ) {
 	unregister_chrdev( my_major, MY_MODULE);
 
     //do clean_up();
-
+	semdestroy(&sem);
+	printk("SE'YA!\n");
 	return;
 }
 
@@ -79,11 +86,11 @@ int my_open( struct inode *inode, struct file *filp ) {
 
 	MOD_INC_USE_COUNT; /*no need in 2.4 or later*/
 
-	if( filp->f_flags & O_NONBLOCK ) {
-                //example of additional flag
-	}
+	// if( filp->f_flags & O_NONBLOCK ) {
+ //                //example of additional flag
+	// }
 
-	if (MINOR( inode->i_rdev )==2){
+	if (MINOR( inode->i_rdev )==1){
         filp->f_op = &my_fops2;
     }
 
