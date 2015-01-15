@@ -59,16 +59,8 @@ typedef struct semaphore sem_t;
 int my_major = 0; 			    /* will hold the major # of my device driver */
 Buff* my_buff;
 sem_t sem;                      /* semaphore to lock the module */
-// int dec_num_of_readers = 0;
-// int dec_num_of_writers = 0;
-// int enc_num_of_readers = 0;
-// int en_num_of_writers = 0;
-
-typedef struct rw_count{
-	int iKey;
-	int num_of_writers;
-	int num_of_readers; 
-} RW_count;
+int num_of_writers = 0;
+int num_of_readers = 0;
 
 int my_open( struct inode *inode, struct file *filp );
 int my_release( struct inode *inode, struct file *filp );
@@ -128,16 +120,15 @@ int my_open( struct inode *inode, struct file *filp ) {
 	int minor = MINOR(inode->i_rdev); 
 	if(minor != 1 && minor != 0)
 		return -EINVAL;
-	if(filp->private_data == NULL){
-		filp->private_data = kmalloc(sizeof(RW_count),GFP_KERNEL);
-		((RW_count*)(filp->private_data))->iKey = iKey;
-		((RW_count*)(filp->private_data))->num_of_writers = 0;
-		((RW_count*)(filp->private_data))->num_of_readers = 0;
-	}
+	//if(filp->private_data == NULL){
+	filp->private_data = kmalloc(sizeof(int),GFP_KERNEL);
+		*((int*)(filp->private_data)) = iKey;
+
+	
 	// if( filp->f_mode & FMODE_READ )
-	// 	filp->private_data->num_of_readers++;
+	// 	num_of_readers++;
 	// if( filp->f_mode & FMODE_WRITE )
-	// 	filp->private_data->num_of_writers++;
+	// 	num_of_writers++;
 
     //printk("Open--> readers: %d , writers: %d\n",num_of_reader,num_of_writer);
 	//MOD_INC_USE_COUNT; 
@@ -164,7 +155,7 @@ int my_release( struct inode *inode, struct file *filp ) {
 	// if( filp->f_mode & FMODE_WRITE )
 	// 	filp->private_data->num_of_writers--;
 
-	//if(filp->private_data->num_of_writers)
+	kfree(filp->private_data);
 	//printk("Close--> readers: %d , writers: %d\n",num_of_reader,num_of_writer);
 	//MOD_DEC_USE_COUNT; /*no need in 2.4 or later*/
 
@@ -173,10 +164,10 @@ int my_release( struct inode *inode, struct file *filp ) {
 
 
 ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  /* decryptor */
-	if(((RW_count*)(filp->private_data))->num_of_writers == 0 || available_data_Buff(my_buff) == 0)
-		return 0;
 	if(count % 8 != 0)
 		return -EINVAL;
+	if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
+		return 0;
 	int data_read = 0;
 	char* tmp_buff = NULL;
 	char* decrypted_data = NULL;
@@ -189,7 +180,7 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 		return -EFAULT;
 	}
 	data_read = read_Buff(my_buff,tmp_buff,count);
-	encryptor(tmp_buff, decrypted_data, count, ((RW_count*)(filp->private_data))->iKey, DECRYPT);
+	encryptor(tmp_buff, decrypted_data, count, *((int*)(filp->private_data)), DECRYPT);
 	copy_to_user(buf,decrypted_data,sizeof(char)*count);
 	kfree(tmp_buff);
 	kfree(decrypted_data);
@@ -201,10 +192,10 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
     //copy the data from user
 	//write the data
     // return the ammount of written data
-	if(((RW_count*)(filp->private_data))->num_of_readers == 0 || available_space_Buff(my_buff) == 0)
-		return 0;
 	if(count % 8 != 0)
 		return -EINVAL;
+	if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
+		return 0;
 	char* tmp_buff = NULL;
 	int data_writen = 0;
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
@@ -221,10 +212,10 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	//read the data
 	//copy the data to user
     //return the ammount of read data
-	if(((RW_count*)(filp->private_data))->num_of_writers == 0 || available_data_Buff(my_buff) == 0)
-		return 0;
 	if(count % 8 != 0)
 		return -EINVAL;
+	if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
+		return 0;
 	char* tmp_buff = NULL;
 	int data_read = 0;
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
@@ -241,10 +232,10 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
         //copy the data from user
 	//write the data
     //return the ammount of written data
-	if(((RW_count*)(filp->private_data))->num_of_readers == 0 || available_space_Buff(my_buff) == 0)
-		return 0;
 	if(count % 8 != 0)
 		return -EINVAL;
+	if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
+		return 0;
 	int data_writen = 0;
 	char* tmp_buff = NULL;
 	char* encrypted_data = NULL;
@@ -257,7 +248,7 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 		kfree(tmp_buff);
 		return -EFAULT;
 	}
-	encryptor(tmp_buff, encrypted_data, count, ((RW_count*)(filp->private_data))->iKey, ENCRYPT);
+	encryptor(tmp_buff, encrypted_data, count, *((int*)(filp->private_data)), ENCRYPT);
 	data_writen = write_Buff(my_buff,tmp_buff,count);
 	kfree(tmp_buff);
 	kfree(encrypted_data);
@@ -272,7 +263,7 @@ loff_t my_llseek(struct file *filp, loff_t f_pos,int i){
 int my_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg) { 
 	if(cmd != HW4_SET_KEY)
 		return -ENOTTY;
-	((RW_count*)(filp->private_data))->iKey = (int)arg;	
+	*((int*)(filp->private_data)) = (int)arg;	
 	return 0;
 }
 
