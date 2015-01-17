@@ -97,7 +97,7 @@ int init_module( void ) {
 	if( my_major < 0 ) {
 		return my_major;
 	}
-	printk("Major: %d\n",my_major);
+	//printk("Major: %d\n",my_major); // TODO Remove bleaaaat
 	//do_init();
 	init_MUTEX(&writers_queue);    /* binary semaphore */
 	init_MUTEX(&readers_queue);    /* binary semaphore */
@@ -131,12 +131,13 @@ int my_open( struct inode *inode, struct file *filp ) {
 		num_of_readers++;
 	else if( filp->f_mode & O_WRONLY )
 		num_of_writers++;
-	if(filp->f_mode & O_RDWR){
+	else if(filp->f_mode & O_RDWR){
 		num_of_writers++;
 		num_of_readers++;
 	}
+	printk("Opened. R: %d, W: %d\n", num_of_readers, num_of_writers);
 
-    //printk("Open--> readers: %d , writers: %d\n",num_of_reader,num_of_writer);
+    //printk("Open--> readers: %d , writers: %d\n",num_of_readers,num_of_writers);
 	//MOD_INC_USE_COUNT; 
 	/*no need in 2.4 or later*/
 
@@ -152,17 +153,22 @@ int my_open( struct inode *inode, struct file *filp ) {
 }
 
 
-int my_release( struct inode *inode, struct file *filp ) {
+int my_release(struct inode *inode, struct file *filp ) {
 	int minor = MINOR(inode->i_rdev); 
 	if(minor != 1 && minor != 0)
 		return -EINVAL;
-	// if( filp->f_mode & FMODE_READ )
-	// 	filp->private_data->num_of_readers--;
-	// if( filp->f_mode & FMODE_WRITE )
-	// 	filp->private_data->num_of_writers--;
+	if( filp->f_mode & O_RDONLY )
+		num_of_readers--;
+	else if( filp->f_mode & O_WRONLY )
+		num_of_writers--;
+	else if(filp->f_mode & O_RDWR){
+		num_of_writers--;
+		num_of_readers--;
+	}
+	printk("Released. R: %d, W: %d\n", num_of_readers, num_of_writers);
 
 	kfree(filp->private_data);
-	//printk("Close--> readers: %d , writers: %d\n",num_of_reader,num_of_writer);
+	//printk("Close--> readers: %d , writers: %d\n",num_of_readers,num_of_writers);
 	//MOD_DEC_USE_COUNT; /*no need in 2.4 or later*/
 
 	return 0;
@@ -173,6 +179,7 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 	if(count % 8 != 0)
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff);
+	printk("Read R: %d W: %d\n", num_of_readers, num_of_writers);
 	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
 	down_interruptible(&readers_queue);
@@ -209,6 +216,7 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
     // return the ammount of written data
 	if(count % 8 != 0)
 		return -EINVAL;
+	printk("Write R: %d W: %d\n", num_of_readers, num_of_writers);
 	int available_data_on_start = available_data_Buff(my_buff);
 	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
@@ -239,6 +247,7 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	if(count % 8 != 0)
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff);
+	printk("Read2 R: %d W: %d\n", num_of_readers, num_of_writers);
 	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
 	down_interruptible(&readers_queue);
@@ -267,6 +276,7 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
     //return the ammount of written data
 	if(count % 8 != 0)
 		return -EINVAL;
+	printk("Write2 R: %d W: %d\n", num_of_readers, num_of_writers);
 	int available_data_on_start = available_data_Buff(my_buff);
 	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
