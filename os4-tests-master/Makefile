@@ -16,7 +16,10 @@ dec:
 enc:
 	mknod $@ c $(MODULE_MAJOR) 1
 
-check: $(TARGET) dec enc
+inv:
+	mknod $@ c $(MODULE_MAJOR) 2
+
+check: $(TARGET) dec enc inv
 	./$(TARGET)
 
 %.o: %.c
@@ -26,6 +29,6 @@ $(TARGET): $(C_OBJS)
 	$(CC) $(C_OBJS) $(LDFLAGS) -o $@
 
 clean:
-	rm -rf *.o $(TARGET) enc dec
+	rm -rf *.o $(TARGET) enc dec inv
 
 .PHONY: all clean check
