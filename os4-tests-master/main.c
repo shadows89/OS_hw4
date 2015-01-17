@@ -88,7 +88,9 @@ static int test_open_invalid() {
 
 static int _test_read_empty(int fd) {
 	char buffer[8];
-	return read(fd, buffer, 8) == 0;
+	int res = read(fd, buffer, 8);
+	printf("empty ? no!!! %d\n",res);
+	return 0;
 }
 TEST_BOTH_WITH_FD(test_read_empty, O_RDONLY, _test_read_empty);
 
@@ -123,32 +125,32 @@ static int _test_no_lseek(int fd) {
 }
 TEST_BOTH_WITH_FD(test_no_lseek, O_RDONLY, _test_no_lseek);
 
-// static unsigned int reader_timestamp;
-// static void *reader_thread(void *data) {
-// 	int fd = *((int *) &data);
-// 	int ret;
-// 	char buffer[8];
-// 	ret = read(fd, buffer, 8);
-// 	reader_timestamp = time(NULL);
-// 	return *(int **) &ret;
-// }
+static unsigned int reader_timestamp;
+static void *reader_thread(void *data) {
+	int fd = *((int *) &data);
+	int ret;
+	char buffer[8];
+	ret = read(fd, buffer, 8);
+	reader_timestamp = time(NULL);
+	return *(int **) &ret;
+}
 
-// static unsigned int writer_timestamp;
-// static void *writer_thread(void *data) {
-// 	int fd = *((int *) &data);
-// 	int ret;
-// 	char buffer[8];
-// 	ret = write(fd, buffer, 8);
-// 	writer_timestamp = time(NULL);
-// 	return *(int **) &ret;
-// }
+static unsigned int writer_timestamp;
+static void *writer_thread(void *data) {
+	int fd = *((int *) &data);
+	int ret;
+	char buffer[8];
+	ret = write(fd, buffer, 8);
+	writer_timestamp = time(NULL);
+	return *(int **) &ret;
+}
 
-// static int with_two_fds(int fd1, int fd2, int (*func)(int, int)) {
-// 	int ret = func(fd1, fd2);
-// 	close(fd1);
-// 	close(fd2);
-// 	return ret;
-// }
+static int with_two_fds(int fd1, int fd2, int (*func)(int, int)) {
+	int ret = func(fd1, fd2);
+	close(fd1);
+	close(fd2);
+	return ret;
+}
 #define TEST_IMPL_WITH_TWO_FDS(name, fd1, fd2, test_func)		\
 	static int name() {						\
 		return with_two_fds((fd1), (fd2), (test_func));		\
@@ -169,170 +171,170 @@ TEST_BOTH_WITH_FD(test_no_lseek, O_RDONLY, _test_no_lseek);
 	)
 
 
-// static int _test_write_blocks_until_read(int fd_read, int fd_write) {
-// 	pthread_t writer;
-// 	char buffer[BUFFER_SIZE];
-// 	int reader_ret, writer_ret;
+static int _test_write_blocks_until_read(int fd_read, int fd_write) {
+	pthread_t writer;
+	char buffer[BUFFER_SIZE];
+	int reader_ret, writer_ret;
 
-// 	if (write(fd_write, buffer, BUFFER_SIZE) < BUFFER_SIZE)
-// 		return 0;
+	if (write(fd_write, buffer, BUFFER_SIZE) < BUFFER_SIZE)
+		return 0;
 
-// 	if (pthread_create(&writer, NULL, writer_thread, *(int **) &fd_write))
-// 		return 0;
-// 	sleep(2);
-// 	reader_ret = read(fd_read, buffer, 8);
-// 	reader_timestamp = time(NULL);
+	if (pthread_create(&writer, NULL, writer_thread, *(int **) &fd_write))
+		return 0;
+	sleep(2);
+	reader_ret = read(fd_read, buffer, 8);
+	reader_timestamp = time(NULL);
 
-// 	if (pthread_join(writer, (void **) &writer_ret))
-// 		return 0;
+	if (pthread_join(writer, (void **) &writer_ret))
+		return 0;
 
-// 	return reader_ret == 8 && writer_ret == 8 &&
-// 		reader_timestamp <= writer_timestamp;
-// }
-// TEST_BOTH_WITH_TWO_FDS(
-// 	test_write_blocks_until_read,
-// 	O_RDONLY,
-// 	O_WRONLY,
-// 	_test_write_blocks_until_read
-// );
+	return reader_ret == 8 && writer_ret == 8 &&
+		reader_timestamp <= writer_timestamp;
+}
+TEST_BOTH_WITH_TWO_FDS(
+	test_write_blocks_until_read,
+	O_RDONLY,
+	O_WRONLY,
+	_test_write_blocks_until_read
+);
 
-// static int _test_write_blocks_until_no_readers(int fd_read, int fd_write) {
-// 	pthread_t writer;
-// 	char buffer[BUFFER_SIZE];
-// 	int writer_ret;
-// 	int close_timestamp;
+static int _test_write_blocks_until_no_readers(int fd_read, int fd_write) {
+	pthread_t writer;
+	char buffer[BUFFER_SIZE];
+	int writer_ret;
+	int close_timestamp;
 
-// 	if (write(fd_write, buffer, BUFFER_SIZE) < BUFFER_SIZE)
-// 		return 0;
+	if (write(fd_write, buffer, BUFFER_SIZE) < BUFFER_SIZE)
+		return 0;
 
-// 	if (pthread_create(&writer, NULL, writer_thread, *(int **) &fd_write))
-// 		return 0;
-// 	sleep(2);
-// 	close_timestamp = time(NULL);
-// 	close(fd_read);
+	if (pthread_create(&writer, NULL, writer_thread, *(int **) &fd_write))
+		return 0;
+	sleep(2);
+	close_timestamp = time(NULL);
+	close(fd_read);
 
-// 	if (pthread_join(writer, (void **) &writer_ret))
-// 		return 0;
+	if (pthread_join(writer, (void **) &writer_ret))
+		return 0;
 
-// 	return writer_ret == 0 && close_timestamp <= writer_timestamp;
-// }
-// TEST_BOTH_WITH_TWO_FDS(
-// 	test_write_blocks_until_no_readers,
-// 	O_RDONLY,
-// 	O_WRONLY,
-// 	_test_write_blocks_until_no_readers
-// );
+	return writer_ret == 0 && close_timestamp <= writer_timestamp;
+}
+TEST_BOTH_WITH_TWO_FDS(
+	test_write_blocks_until_no_readers,
+	O_RDONLY,
+	O_WRONLY,
+	_test_write_blocks_until_no_readers
+);
 
-// static int _test_write_blocks_until_signal(int fd_read, int fd_write) {
-// 	char buffer[BUFFER_SIZE];
-// 	int writer_ret;
-// 	int child;
+static int _test_write_blocks_until_signal(int fd_read, int fd_write) {
+	char buffer[BUFFER_SIZE];
+	int writer_ret;
+	int child;
 
-// 	if (write(fd_write, buffer, BUFFER_SIZE) < BUFFER_SIZE)
-// 		return 0;
+	if (write(fd_write, buffer, BUFFER_SIZE) < BUFFER_SIZE)
+		return 0;
 
-// 	child = fork();
-// 	if (child == -1)
-// 		return 0;
+	child = fork();
+	if (child == -1)
+		return 0;
 
-// 	if (!child) {
-// 		writer_ret = write(fd_write, buffer, 8);
-// 		if (writer_ret == -1 && errno == EINTR)
-// 			exit(22);
-// 		exit(0);
-// 	} else {
-// 		sleep(1);
-// 		kill(child, SIGUSR1);
-// 		waitpid(child, &writer_ret, 0);
-// 	}
+	if (!child) {
+		writer_ret = write(fd_write, buffer, 8);
+		if (writer_ret == -1 && errno == EINTR)
+			exit(22);
+		exit(0);
+	} else {
+		sleep(1);
+		kill(child, SIGUSR1);
+		waitpid(child, &writer_ret, 0);
+	}
 
-// 	return WEXITSTATUS(writer_ret) == 22;
-// }
-// TEST_BOTH_WITH_TWO_FDS(
-// 	test_write_blocks_until_signal,
-// 	O_RDONLY,
-// 	O_WRONLY,
-// 	_test_write_blocks_until_signal
-// );
+	return WEXITSTATUS(writer_ret) == 22;
+}
+TEST_BOTH_WITH_TWO_FDS(
+	test_write_blocks_until_signal,
+	O_RDONLY,
+	O_WRONLY,
+	_test_write_blocks_until_signal
+);
 
-// static int _test_read_blocks_until_write(int fd_read, int fd_write) {
-// 	pthread_t reader, writer;
-// 	int reader_ret, writer_ret;
+static int _test_read_blocks_until_write(int fd_read, int fd_write) {
+	pthread_t reader, writer;
+	int reader_ret, writer_ret;
 
-// 	if (pthread_create(&reader, NULL, reader_thread, *(int **) &fd_read))
-// 		return 0;
-// 	sleep(2);
+	if (pthread_create(&reader, NULL, reader_thread, *(int **) &fd_read))
+		return 0;
+	sleep(2);
 
-// 	if (pthread_create(&writer, NULL, writer_thread, *(int **) &fd_write))
-// 		return 0;
+	if (pthread_create(&writer, NULL, writer_thread, *(int **) &fd_write))
+		return 0;
 
-// 	if (pthread_join(writer, (void **) &writer_ret))
-// 		return 0;
+	if (pthread_join(writer, (void **) &writer_ret))
+		return 0;
 
-// 	if (pthread_join(reader, (void **) &reader_ret))
-// 		return 0;
+	if (pthread_join(reader, (void **) &reader_ret))
+		return 0;
 
-// 	return reader_ret == 8 && writer_ret == 8 &&
-// 		reader_timestamp >= writer_timestamp;
-// }
-// TEST_BOTH_WITH_TWO_FDS(
-// 	test_read_blocks_until_write,
-// 	O_RDONLY,
-// 	O_WRONLY,
-// 	_test_read_blocks_until_write
-// );
+	return reader_ret == 8 && writer_ret == 8 &&
+		reader_timestamp >= writer_timestamp;
+}
+TEST_BOTH_WITH_TWO_FDS(
+	test_read_blocks_until_write,
+	O_RDONLY,
+	O_WRONLY,
+	_test_read_blocks_until_write
+);
 
-// static int _test_read_blocks_until_no_writers(int fd_read, int fd_write) {
-// 	pthread_t reader;
-// 	int reader_ret;
-// 	int close_timestamp;
+static int _test_read_blocks_until_no_writers(int fd_read, int fd_write) {
+	pthread_t reader;
+	int reader_ret;
+	int close_timestamp;
 
-// 	if (pthread_create(&reader, NULL, reader_thread, *(int **) &fd_read))
-// 		return 0;
-// 	sleep(2);
-// 	close_timestamp = time(NULL);
-// 	close(fd_write);
+	if (pthread_create(&reader, NULL, reader_thread, *(int **) &fd_read))
+		return 0;
+	sleep(2);
+	close_timestamp = time(NULL);
+	close(fd_write);
 
-// 	if (pthread_join(reader, (void **) &reader_ret))
-// 		return 0;
+	if (pthread_join(reader, (void **) &reader_ret))
+		return 0;
 
-// 	return reader_ret == 0 && close_timestamp <= reader_timestamp;
-// }
-// TEST_BOTH_WITH_TWO_FDS(
-// 	test_read_blocks_until_no_writers,
-// 	O_RDONLY,
-// 	O_WRONLY,
-// 	_test_read_blocks_until_no_writers
-// );
+	return reader_ret == 0 && close_timestamp <= reader_timestamp;
+}
+TEST_BOTH_WITH_TWO_FDS(
+	test_read_blocks_until_no_writers,
+	O_RDONLY,
+	O_WRONLY,
+	_test_read_blocks_until_no_writers
+);
 
-// static int _test_read_blocks_until_signal(int fd_read, int fd_write) {
-// 	char buffer[8];
-// 	int reader_ret;
-// 	int child;
+static int _test_read_blocks_until_signal(int fd_read, int fd_write) {
+	char buffer[8];
+	int reader_ret;
+	int child;
 
-// 	child = fork();
-// 	if (child == -1)
-// 		return 0;
+	child = fork();
+	if (child == -1)
+		return 0;
 
-// 	if (!child) {
-// 		reader_ret = read(fd_read, buffer, 8);
-// 		if (reader_ret == -1 && errno == EINTR)
-// 			exit(22);
-// 		exit(0);
-// 	} else {
-// 		sleep(1);
-// 		kill(child, SIGUSR1);
-// 		waitpid(child, &reader_ret, 0);
-// 	}
+	if (!child) {
+		reader_ret = read(fd_read, buffer, 8);
+		if (reader_ret == -1 && errno == EINTR)
+			exit(22);
+		exit(0);
+	} else {
+		sleep(1);
+		kill(child, SIGUSR1);
+		waitpid(child, &reader_ret, 0);
+	}
 
-// 	return WEXITSTATUS(reader_ret) == 22;
-// }
-// TEST_BOTH_WITH_TWO_FDS(
-// 	test_read_blocks_until_signal,
-// 	O_RDONLY,
-// 	O_WRONLY,
-// 	_test_read_blocks_until_signal
-// );
+	return WEXITSTATUS(reader_ret) == 22;
+}
+TEST_BOTH_WITH_TWO_FDS(
+	test_read_blocks_until_signal,
+	O_RDONLY,
+	O_WRONLY,
+	_test_read_blocks_until_signal
+);
 
 static int set_key(int fd, int key) {
 	return ioctl(fd, HW4_SET_KEY, key);
@@ -348,88 +350,88 @@ static int _test_invalid_ioctl(int fd) {
 }
 TEST_BOTH_WITH_FD(test_invalid_ioctl, O_RDONLY, _test_invalid_ioctl);
 
-// static int do_encrypt(char *dst, const char *src, size_t len, int key) {
-// 	int fd = get_enc(O_RDWR);
-// 	int ret = 0;
+static int do_encrypt(char *dst, const char *src, size_t len, int key) {
+	int fd = get_enc(O_RDWR);
+	int ret = 0;
 
-// 	set_key(fd, key);
-// 	if ((write(fd, src, len) != len) ||
-// 	    (read(fd, dst, len) != len))
-// 		ret = 1;
-// 	close(fd);
-// 	return ret;
-// }
+	set_key(fd, key);
+	if ((write(fd, src, len) != len) ||
+	    (read(fd, dst, len) != len))
+		ret = 1;
+	close(fd);
+	return ret;
+}
 
-// static int do_decrypt(char *dst, const char *src, size_t len, int key) {
-// 	int fd = get_dec(O_RDWR);
-// 	int ret = 0;
-// 	set_key(fd, key);
+static int do_decrypt(char *dst, const char *src, size_t len, int key) {
+	int fd = get_dec(O_RDWR);
+	int ret = 0;
+	set_key(fd, key);
 
-// 	if ((write(fd, src, len) != len) ||
-// 	    (read(fd, dst, len) != len))
-// 		ret = 1;
-// 	close(fd);
-// 	return ret;
-// }
+	if ((write(fd, src, len) != len) ||
+	    (read(fd, dst, len) != len))
+		ret = 1;
+	close(fd);
+	return ret;
+}
 
 
-// static int test_encryption() {
-// 	char buffer_kernel[1024];
-// 	char buffer_user[1024];
-// 	int i;
+static int test_encryption() {
+	char buffer_kernel[1024];
+	char buffer_user[1024];
+	int i;
 
-// 	for (i = 0; i < 1024; i++) {
-// 		buffer_kernel[i] = buffer_user[i] = i % 234;
-// 	}
-// 	do_encrypt(buffer_kernel, buffer_kernel, 1024, 1234);
-// 	encryptor(buffer_user, buffer_user, 1024, 1234, ENCRYPT);
+	for (i = 0; i < 1024; i++) {
+		buffer_kernel[i] = buffer_user[i] = i % 234;
+	}
+	do_encrypt(buffer_kernel, buffer_kernel, 1024, 1234);
+	encryptor(buffer_user, buffer_user, 1024, 1234, ENCRYPT);
 
-// 	return memcmp(buffer_user, buffer_kernel, 1024) == 0;
-// }
+	return memcmp(buffer_user, buffer_kernel, 1024) == 0;
+}
 
-// static int test_decryption() {
-// 	char buffer_kernel[1024];
-// 	char buffer_user[1024];
-// 	int i;
+static int test_decryption() {
+	char buffer_kernel[1024];
+	char buffer_user[1024];
+	int i;
 
-// 	for (i = 0; i < 1024; i++) {
-// 		buffer_kernel[i] = buffer_user[i] = i % 234;
-// 	}
-// 	do_decrypt(buffer_kernel, buffer_kernel, 1024, 1234);
-// 	encryptor(buffer_user, buffer_user, 1024, 1234, DECRYPT);
+	for (i = 0; i < 1024; i++) {
+		buffer_kernel[i] = buffer_user[i] = i % 234;
+	}
+	do_decrypt(buffer_kernel, buffer_kernel, 1024, 1234);
+	encryptor(buffer_user, buffer_user, 1024, 1234, DECRYPT);
 
-// 	return memcmp(buffer_user, buffer_kernel, 1024) == 0;
-// }
+	return memcmp(buffer_user, buffer_kernel, 1024) == 0;
+}
 
-// static int test_sanity() {
-// 	char buffer_pre[1024];
-// 	char buffer_post[1024];
-// 	int i;
+static int test_sanity() {
+	char buffer_pre[1024];
+	char buffer_post[1024];
+	int i;
 
-// 	for (i = 0; i < 1024; i++) {
-// 		buffer_pre[i] = i % 234;
-// 	}
+	for (i = 0; i < 1024; i++) {
+		buffer_pre[i] = i % 234;
+	}
 
-// 	do_encrypt(buffer_post, buffer_pre, 1024, 123);
-// 	do_decrypt(buffer_post, buffer_post, 1024, 123);
+	do_encrypt(buffer_post, buffer_pre, 1024, 123);
+	do_decrypt(buffer_post, buffer_post, 1024, 123);
 
-// 	return memcmp(buffer_pre, buffer_post, 1024) == 0;
-// }
+	return memcmp(buffer_pre, buffer_post, 1024) == 0;
+}
 
-// static int test_key_not_shared() {
-// 	char buffer_pre[1024];
-// 	char buffer_post[1024];
-// 	int i;
+static int test_key_not_shared() {
+	char buffer_pre[1024];
+	char buffer_post[1024];
+	int i;
 
-// 	for (i = 0; i < 1024; i++) {
-// 		buffer_pre[i] = i % 234;
-// 	}
+	for (i = 0; i < 1024; i++) {
+		buffer_pre[i] = i % 234;
+	}
 
-// 	do_encrypt(buffer_post, buffer_pre, 1024, 123);
-// 	do_decrypt(buffer_post, buffer_post, 1024, 321);
+	do_encrypt(buffer_post, buffer_pre, 1024, 123);
+	do_decrypt(buffer_post, buffer_post, 1024, 321);
 
-// 	return memcmp(buffer_pre, buffer_post, 1024) != 0;
-// }
+	return memcmp(buffer_pre, buffer_post, 1024) != 0;
+}
 
 #define DEFINE_TEST(func) { func, #func }
 #define DEFINE_TEST_ON_BOTH(func)	\
@@ -449,16 +451,16 @@ struct test_def tests[] = {
 	DEFINE_TEST_ON_BOTH(test_no_lseek),
 	DEFINE_TEST_ON_BOTH(test_set_key),
 	DEFINE_TEST_ON_BOTH(test_invalid_ioctl),
-	// DEFINE_TEST_ON_BOTH(test_write_blocks_until_read),
-	// DEFINE_TEST_ON_BOTH(test_write_blocks_until_no_readers),
-	// DEFINE_TEST_ON_BOTH(test_write_blocks_until_signal),
-	// DEFINE_TEST_ON_BOTH(test_read_blocks_until_write),
-	// DEFINE_TEST_ON_BOTH(test_read_blocks_until_no_writers),
-	// DEFINE_TEST_ON_BOTH(test_read_blocks_until_signal),
-	// DEFINE_TEST(test_encryption),
-	// DEFINE_TEST(test_decryption),
-	// DEFINE_TEST(test_sanity),
-	// DEFINE_TEST(test_key_not_shared),
+	DEFINE_TEST_ON_BOTH(test_write_blocks_until_read),
+	DEFINE_TEST_ON_BOTH(test_write_blocks_until_no_readers),
+	DEFINE_TEST_ON_BOTH(test_write_blocks_until_signal),
+	DEFINE_TEST_ON_BOTH(test_read_blocks_until_write),
+	DEFINE_TEST_ON_BOTH(test_read_blocks_until_no_writers),
+	DEFINE_TEST_ON_BOTH(test_read_blocks_until_signal),
+	DEFINE_TEST(test_encryption),
+	DEFINE_TEST(test_decryption),
+	DEFINE_TEST(test_sanity),
+	DEFINE_TEST(test_key_not_shared),
 	{ NULL, "The end" },
 };
 
