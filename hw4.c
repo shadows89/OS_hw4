@@ -58,7 +58,8 @@ typedef struct semaphore sem_t;
 /* globals */
 int my_major = 0; 			    /* will hold the major # of my device driver */
 Buff* my_buff;
-sem_t sem;                      /* semaphore to lock the module */
+sem_t writers_queue;                      /* semaphore as a wait queue for writers */
+sem_t readers_queue;                      /* semaphore as a wait queue for readers */
 int num_of_writers = 0;
 int num_of_readers = 0;
 
@@ -98,7 +99,8 @@ int init_module( void ) {
 	}
 	printk("Major: %d\n",my_major);
 	//do_init();
-	init_MUTEX(&sem);    /* binary semaphore */
+	init_MUTEX(&writers_queue);    /* binary semaphore */
+	init_MUTEX(&readers_queue);    /* binary semaphore */
 	my_buff = init_Buff(BUF_SIZE);
 	if(my_buff == NULL)
 		return -1;
@@ -125,10 +127,14 @@ int my_open( struct inode *inode, struct file *filp ) {
 		*((int*)(filp->private_data)) = iKey;
 
 	
-	// if( filp->f_mode & FMODE_READ )
-	// 	num_of_readers++;
-	// if( filp->f_mode & FMODE_WRITE )
-	// 	num_of_writers++;
+	if( filp->f_mode & O_RDONLY )
+		num_of_readers++;
+	else if( filp->f_mode & O_WRONLY )
+		num_of_writers++;
+	if(filp->f_mode & O_RDWR){
+		num_of_writers++;
+		num_of_readers++;
+	}
 
     //printk("Open--> readers: %d , writers: %d\n",num_of_reader,num_of_writer);
 	//MOD_INC_USE_COUNT; 
@@ -166,8 +172,12 @@ int my_release( struct inode *inode, struct file *filp ) {
 ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  /* decryptor */
 	if(count % 8 != 0)
 		return -EINVAL;
-	if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
+	int available_space_on_start = available_space_Buff(my_buff);
+	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
+	down_interruptible(&readers_queue);
+	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
+	// 	return 0;
 	int data_read = 0;
 	char* tmp_buff = NULL;
 	char* decrypted_data = NULL;
@@ -184,6 +194,11 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 	copy_to_user(buf,decrypted_data,sizeof(char)*count);
 	kfree(tmp_buff);
 	kfree(decrypted_data);
+	up(&readers_queue);
+	if(available_data_Buff(my_buff) == 0)
+		down_interruptible(&readers_queue);   /* writer will up readers_queue */
+	if(available_space_on_start == 0 && data_read > 0)
+		up(&writers_queue);  /* we allow writer to work */
     return data_read;
 }
 
@@ -194,8 +209,12 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
     // return the ammount of written data
 	if(count % 8 != 0)
 		return -EINVAL;
-	if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
+	int available_data_on_start = available_data_Buff(my_buff);
+	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
+	down_interruptible(&writers_queue); 
+	// if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
+	// 	return 0;
 	char* tmp_buff = NULL;
 	int data_writen = 0;
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
@@ -204,6 +223,11 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
 	copy_from_user(tmp_buff,buf,sizeof(char)*count);
 	data_writen = write_Buff(my_buff, tmp_buff, count);
 	kfree(tmp_buff);
+	up(&writers_queue);
+	if(available_space_Buff(my_buff) == 0)
+		down_interruptible(&writers_queue);  /* reader will up writers_queue */
+	if(available_data_on_start == 0 && data_writen > 0)
+		up(&readers_queue);  /* we allow reader to work */
 	return data_writen;
 }
 
@@ -214,8 +238,12 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
     //return the ammount of read data
 	if(count % 8 != 0)
 		return -EINVAL;
-	if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
+	int available_space_on_start = available_space_Buff(my_buff);
+	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
+	down_interruptible(&readers_queue);
+	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
+	// 	return 0;
 	char* tmp_buff = NULL;
 	int data_read = 0;
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
@@ -224,6 +252,11 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	data_read = read_Buff(my_buff, tmp_buff, count);
 	copy_to_user(buf,tmp_buff,sizeof(char)*count);
 	kfree(tmp_buff);
+	up(&readers_queue);
+	if(available_data_Buff(my_buff) == 0)
+		down_interruptible(&readers_queue);   /* writer will up readers_queue */
+	if(available_space_on_start == 0 && data_read > 0)
+		up(&writers_queue);  /* we allow writer to work */
 	return data_read;
 }
 
@@ -234,8 +267,12 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
     //return the ammount of written data
 	if(count % 8 != 0)
 		return -EINVAL;
-	if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
+	int available_data_on_start = available_data_Buff(my_buff);
+	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
+	down_interruptible(&writers_queue);
+	// if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
+	// 	return 0;
 	int data_writen = 0;
 	char* tmp_buff = NULL;
 	char* encrypted_data = NULL;
@@ -252,6 +289,11 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 	data_writen = write_Buff(my_buff,tmp_buff,count);
 	kfree(tmp_buff);
 	kfree(encrypted_data);
+	up(&writers_queue);
+	if(available_space_Buff(my_buff) == 0)
+		down_interruptible(&writers_queue);  /* reader will up writers_queue */
+	if(available_data_on_start == 0 && data_writen > 0)
+		up(&readers_queue);  /* we allow reader to work */
     return data_writen;
 }
 
