@@ -123,32 +123,32 @@ static int _test_no_lseek(int fd) {
 }
 TEST_BOTH_WITH_FD(test_no_lseek, O_RDONLY, _test_no_lseek);
 
-static unsigned int reader_timestamp;
-static void *reader_thread(void *data) {
-	int fd = *((int *) &data);
-	int ret;
-	char buffer[8];
-	ret = read(fd, buffer, 8);
-	reader_timestamp = time(NULL);
-	return *(int **) &ret;
-}
+// static unsigned int reader_timestamp;
+// static void *reader_thread(void *data) {
+// 	int fd = *((int *) &data);
+// 	int ret;
+// 	char buffer[8];
+// 	ret = read(fd, buffer, 8);
+// 	reader_timestamp = time(NULL);
+// 	return *(int **) &ret;
+// }
 
-static unsigned int writer_timestamp;
-static void *writer_thread(void *data) {
-	int fd = *((int *) &data);
-	int ret;
-	char buffer[8];
-	ret = write(fd, buffer, 8);
-	writer_timestamp = time(NULL);
-	return *(int **) &ret;
-}
+// static unsigned int writer_timestamp;
+// static void *writer_thread(void *data) {
+// 	int fd = *((int *) &data);
+// 	int ret;
+// 	char buffer[8];
+// 	ret = write(fd, buffer, 8);
+// 	writer_timestamp = time(NULL);
+// 	return *(int **) &ret;
+// }
 
-static int with_two_fds(int fd1, int fd2, int (*func)(int, int)) {
-	int ret = func(fd1, fd2);
-	close(fd1);
-	close(fd2);
-	return ret;
-}
+// static int with_two_fds(int fd1, int fd2, int (*func)(int, int)) {
+// 	int ret = func(fd1, fd2);
+// 	close(fd1);
+// 	close(fd2);
+// 	return ret;
+// }
 #define TEST_IMPL_WITH_TWO_FDS(name, fd1, fd2, test_func)		\
 	static int name() {						\
 		return with_two_fds((fd1), (fd2), (test_func));		\
@@ -334,19 +334,19 @@ static int with_two_fds(int fd1, int fd2, int (*func)(int, int)) {
 // 	_test_read_blocks_until_signal
 // );
 
-// static int set_key(int fd, int key) {
-// 	return ioctl(fd, HW4_SET_KEY, key);
-// }
+static int set_key(int fd, int key) {
+	return ioctl(fd, HW4_SET_KEY, key);
+}
 
-// static int _test_set_key(int fd) {
-// 	return set_key(fd, 2345) == 0;
-// }
-// TEST_BOTH_WITH_FD(test_set_key, O_RDONLY, _test_set_key);
+static int _test_set_key(int fd) {
+	return set_key(fd, 2345) == 0;
+}
+TEST_BOTH_WITH_FD(test_set_key, O_RDONLY, _test_set_key);
 
-// static int _test_invalid_ioctl(int fd) {
-// 	return ioctl(fd, HW4_SET_KEY + 1, 0) == -1 && errno == ENOTTY;
-// }
-// TEST_BOTH_WITH_FD(test_invalid_ioctl, O_RDONLY, _test_invalid_ioctl);
+static int _test_invalid_ioctl(int fd) {
+	return ioctl(fd, HW4_SET_KEY + 1, 0) == -1 && errno == ENOTTY;
+}
+TEST_BOTH_WITH_FD(test_invalid_ioctl, O_RDONLY, _test_invalid_ioctl);
 
 // static int do_encrypt(char *dst, const char *src, size_t len, int key) {
 // 	int fd = get_enc(O_RDWR);
