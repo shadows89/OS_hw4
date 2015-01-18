@@ -299,7 +299,7 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
 	if(tmp_buff == NULL)
 		return -EFAULT;
-	copy_to_user(tmp_buff,buf,sizeof(char)*count);
+	copy_from_user(tmp_buff,buf,sizeof(char)*count);
 	encrypted_data = kmalloc(sizeof(char)*count,GFP_KERNEL);
 	if(encrypted_data == NULL){
 		kfree(tmp_buff);
