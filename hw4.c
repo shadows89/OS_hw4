@@ -379,9 +379,14 @@ int write_Buff(Buff* buff, char* source, int count) {
 	if (bytes_available % 8 != 0 || bytes_to_write % 8 != 0) {
 		return -1; // We shouldn't get here!!!!!!!
 	}
+	printk("bytes_to_write %d\n",bytes_to_write);
 	for (i = 0; i < bytes_to_write; i++) {
 		buff->buff[buff->last] = source[i];
 		buff->last = (buff->last + 1) % buff->size_of_buff;
+	}
+	if(buff->first == buff->last){
+		buff->buff_full = 1;
+		printk("buff->buff_full = 1, first: %d, last:%d\n",buff->first, buff->last);
 	}
 	return bytes_to_write;
 }
@@ -396,6 +401,10 @@ int read_Buff(Buff* buff, char* target, int count) {
 	for (i = 0; i < bytes_to_read; i++) {
 		target[i] = buff->buff[buff->first];
 		buff->first = (buff->first + 1) % buff->size_of_buff;
+	}
+	if(bytes_to_read != 0){
+		buff->buff_full = 0;
+		printk("buff->buff_full = 0, first: %d, last:%d\n",buff->first, buff->last);
 	}
 	return bytes_to_read;
 }
