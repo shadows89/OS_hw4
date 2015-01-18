@@ -79,6 +79,7 @@ struct file_operations my_fops = {
 	.write=		my_write,
 	.llseek=	my_llseek,
 	.ioctl=		my_ioctl,
+	.owner=		THIS_MODULE,
 };
 
 struct file_operations my_fops2 = {
@@ -88,6 +89,7 @@ struct file_operations my_fops2 = {
 	.write=		my_write2,
 	.llseek=	my_llseek,
 	.ioctl=		my_ioctl,
+	.owner=		THIS_MODULE,
 };
 
 
@@ -176,7 +178,7 @@ int my_release(struct inode *inode, struct file *filp ) {
 
 
 ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  /* decryptor */
-	if(filp->f_mode & FMODE_WRITE)
+	if(filp->f_mode & FMODE_WRITE && !(filp->f_mode & FMODE_READ))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
@@ -216,7 +218,7 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
     //copy the data from user
 	//write the data
     // return the ammount of written data
-	if(filp->f_mode & FMODE_READ)
+	if(filp->f_mode & FMODE_READ && !(filp->f_mode & FMODE_WRITE))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
@@ -248,7 +250,7 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	//read the data
 	//copy the data to user
     //return the ammount of read data
-	if(filp->f_mode & FMODE_WRITE)
+	if(filp->f_mode & FMODE_WRITE && !(filp->f_mode & FMODE_READ))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
@@ -280,7 +282,7 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
         //copy the data from user
 	//write the data
     //return the ammount of written data
-	if(filp->f_mode & FMODE_READ)
+	if(filp->f_mode & FMODE_READ && !(filp->f_mode & FMODE_WRITE))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
