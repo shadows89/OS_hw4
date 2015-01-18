@@ -163,6 +163,15 @@ int my_release(struct inode *inode, struct file *filp ) {
 		num_of_readers--;
 	else if( filp->f_mode & FMODE_WRITE )
 		num_of_writers--;
+
+	if(num_of_writers == 0 && num_of_readers != 0){
+		down_trylock(&readers_queue);
+		up(&readers_queue);
+	}
+	if(num_of_readers == 0 && num_of_writers != 0){
+		down_trylock(&writers_queue);
+		up(&writers_queue);
+	}
 	// else if(filp->f_mode & O_RDWR){
 	// 	num_of_writers--;
 	// 	num_of_readers--;
@@ -187,6 +196,8 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
 	down_interruptible(&readers_queue);
+	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
+		return 0;
 	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
 	// 	return 0;
 	int data_read = 0;
@@ -226,7 +237,9 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
 	int available_data_on_start = available_data_Buff(my_buff);
 	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
-	down_interruptible(&writers_queue); 
+	down_interruptible(&writers_queue);
+	 if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
+		return 0;
 	// if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
 	// 	return 0;
 	char* tmp_buff = NULL;
@@ -259,6 +272,8 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
 	down_interruptible(&readers_queue);
+	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
+		return 0;
 	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
 	// 	return 0;
 	char* tmp_buff = NULL;
@@ -291,6 +306,8 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
 	down_interruptible(&writers_queue);
+	if(num_of_readers == 0 && available_space_Buff(my_buff) == 0)
+		return 0;
 	// if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
 	// 	return 0;
 	int data_writen = 0;
@@ -359,7 +376,7 @@ int available_data_Buff(Buff* buff) {
 	if (buff->first < buff->last) {
 		return buff->last - buff->first;
 	} else if (buff->first > buff->last) {
-		return buff->size_of_buff - buff->first + buff->last;
+		return (buff->size_of_buff - buff->first + buff->last);
 	} else if ((buff->first == buff->last) && (buff->buff_full == 1)) {
 		return buff->size_of_buff;
 	} else if ((buff->first == buff->last) && (buff->buff_full == 0)) {
