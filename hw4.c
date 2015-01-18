@@ -127,14 +127,14 @@ int my_open( struct inode *inode, struct file *filp ) {
 		*((int*)(filp->private_data)) = iKey;
 
 	
-	if( filp->f_mode & O_RDONLY )
+	if( filp->f_mode & FMODE_READ )
 		num_of_readers++;
-	else if( filp->f_mode & O_WRONLY )
+	else if( filp->f_mode & FMODE_WRITE )
 		num_of_writers++;
-	else if(filp->f_mode & O_RDWR){
-		num_of_writers++;
-		num_of_readers++;
-	}
+	// else if(filp->f_mode & O_RDWR){
+	// 	num_of_writers++;
+	// 	num_of_readers++;
+	// }
 	printk("Opened. R: %d, W: %d\n", num_of_readers, num_of_writers);
 
     //printk("Open--> readers: %d , writers: %d\n",num_of_readers,num_of_writers);
@@ -157,14 +157,14 @@ int my_release(struct inode *inode, struct file *filp ) {
 	int minor = MINOR(inode->i_rdev); 
 	if(minor != 1 && minor != 0)
 		return -EINVAL;
-	if( filp->f_mode & O_RDONLY )
+	if( filp->f_mode & FMODE_READ )
 		num_of_readers--;
-	else if( filp->f_mode & O_WRONLY )
+	else if( filp->f_mode & FMODE_WRITE )
 		num_of_writers--;
-	else if(filp->f_mode & O_RDWR){
-		num_of_writers--;
-		num_of_readers--;
-	}
+	// else if(filp->f_mode & O_RDWR){
+	// 	num_of_writers--;
+	// 	num_of_readers--;
+	// }
 	printk("Released. R: %d, W: %d\n", num_of_readers, num_of_writers);
 
 	kfree(filp->private_data);
@@ -176,12 +176,12 @@ int my_release(struct inode *inode, struct file *filp ) {
 
 
 ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  /* decryptor */
-	if(filp->f_mode & O_WRONLY)
+	if(filp->f_mode & FMODE_WRITE)
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff);
-	printk("Read R: %d W: %d\n", num_of_readers, num_of_writers);
+	//printk("Read R: %d W: %d\n", num_of_readers, num_of_writers);
 	if(num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
 	down_interruptible(&readers_queue);
@@ -216,7 +216,7 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
     //copy the data from user
 	//write the data
     // return the ammount of written data
-	if(filp->f_mode & O_RDONLY)
+	if(filp->f_mode & FMODE_READ)
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
@@ -248,7 +248,7 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	//read the data
 	//copy the data to user
     //return the ammount of read data
-	if(filp->f_mode & O_WRONLY)
+	if(filp->f_mode & FMODE_WRITE)
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
@@ -280,7 +280,7 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
         //copy the data from user
 	//write the data
     //return the ammount of written data
-	if(filp->f_mode & O_RDONLY)
+	if(filp->f_mode & FMODE_READ)
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
