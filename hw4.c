@@ -200,7 +200,7 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 	}
 	data_read = read_Buff(my_buff,tmp_buff,count);
 	encryptor(tmp_buff, decrypted_data, count, *((int*)(filp->private_data)), DECRYPT);
-	copy_to_user(buf,decrypted_data,sizeof(char)*count);
+	copy_to_user(buf,decrypted_data,sizeof(char)*data_read);
 	kfree(tmp_buff);
 	kfree(decrypted_data);
 	up(&readers_queue);
@@ -297,14 +297,14 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
 	if(tmp_buff == NULL)
 		return -EFAULT;
-	copy_to_user(tmp_buff,buf,sizeof(char)*count);
+	copy_from_user(tmp_buff,buf,sizeof(char)*count);
 	encrypted_data = kmalloc(sizeof(char)*count,GFP_KERNEL);
 	if(encrypted_data == NULL){
 		kfree(tmp_buff);
 		return -EFAULT;
 	}
 	encryptor(tmp_buff, encrypted_data, count, *((int*)(filp->private_data)), ENCRYPT);
-	data_writen = write_Buff(my_buff,tmp_buff,count);
+	data_writen = write_Buff(my_buff,encrypted_data,count);
 	kfree(tmp_buff);
 	kfree(encrypted_data);
 	up(&writers_queue);
