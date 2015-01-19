@@ -172,8 +172,8 @@ int my_release(struct inode *inode, struct file *filp ) {
 	int minor = MINOR(inode->i_rdev);
 	int writers = 0;
 	int readers = 0;
-	sem_t* sem_write;
-	sem_t* sem_read;
+	sem_t* q_write;
+	sem_t* q_read;
 	if(minor != 1 && minor != 0)
 		return -EINVAL;
 	if( filp->f_mode & FMODE_READ )
@@ -185,22 +185,22 @@ int my_release(struct inode *inode, struct file *filp ) {
 	if(minor == 0){
 		readers = dec_num_of_readers;
 		writers = dec_num_of_writers;
-		sem_write = &writers_queue_dec;
-		sem_read = &readers_queue_dec;
+		q_write = &writers_queue_dec;
+		q_read = &readers_queue_dec;
 	}
 	else{
 		readers = enc_num_of_readers;
 		writers = enc_num_of_writers;
-		sem_write = &writers_queue_enc;
-		sem_read = &readers_queue_enc;
+		q_write = &writers_queue_enc;
+		q_read = &readers_queue_enc;
 	}
 	if(filp->f_mode & FMODE_WRITE && writers == 0 && readers != 0){
-		down_trylock(sem_read);
-		up(sem_read);
+		down_trylock(q_read);
+		up(q_read);
 	}
 	if(filp->f_mode & FMODE_READ && readers == 0 && writers != 0){
-		down_trylock(sem_write);
-		up(sem_write);
+		down_trylock(q_write);
+		up(q_write);
 	}
 	// else if(filp->f_mode & O_RDWR){
 	// 	num_of_writers--;
@@ -249,8 +249,10 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 	up(&readers_queue_dec);
 	if(available_data_Buff(my_buff) == 0)
 		down_interruptible(&readers_queue_dec);   /* writer will up readers_queue */
-	if(available_space_on_start == 0 && data_read > 0)
+	if(available_space_on_start == 0 && data_read > 0){
+		down_trylock(&writers_queue_dec);
 		up(&writers_queue_dec);  /* we allow writer to work */
+	}
     return data_read;
 }
 
@@ -283,8 +285,10 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
 	up(&writers_queue_dec);
 	if(available_space_Buff(my_buff) == 0)
 		down_interruptible(&writers_queue_dec);  /* reader will up writers_queue */
-	if(available_data_on_start == 0 && data_writen > 0)
+	if(available_data_on_start == 0 && data_writen > 0){
+		down_trylock(&readers_queue_dec);
 		up(&readers_queue_dec);  /* we allow reader to work */
+	}
 	return data_writen;
 }
 
@@ -317,8 +321,10 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	up(&readers_queue_enc);
 	if(available_data_Buff(my_buff2) == 0)
 		down_interruptible(&readers_queue_enc);   /* writer will up readers_queue */
-	if(available_space_on_start == 0 && data_read > 0)
+	if(available_space_on_start == 0 && data_read > 0){
+		down_trylock(&writers_queue_enc);
 		up(&writers_queue_enc);  /* we allow writer to work */
+	}
 	return data_read;
 }
 
@@ -359,8 +365,10 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 	up(&writers_queue_enc);
 	if(available_space_Buff(my_buff2) == 0)
 		down_interruptible(&writers_queue_enc);  /* reader will up writers_queue */
-	if(available_data_on_start == 0 && data_writen > 0)
+	if(available_data_on_start == 0 && data_writen > 0){
+		down_trylock(&readers_queue_enc);
 		up(&readers_queue_enc);  /* we allow reader to work */
+	}
     return data_writen;
 }
 
