@@ -229,9 +229,13 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 		return 0;
 	if(down_interruptible(&readers_queue_dec) != 0)
 		return -EINTR;
-	if(dec_num_of_writers == 0 && available_data_Buff(my_buff) == 0){
-		up(&readers_queue_dec);
-		return 0;
+	if(available_data_Buff(my_buff) == 0){
+		if(dec_num_of_writers == 0){
+			up(&readers_queue_dec);
+			return 0;
+		}
+		else if(down_interruptible(&readers_queue_dec) != 0)
+		return -EINTR; 
 	}
 	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
 	// 	return 0;
@@ -315,11 +319,16 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	//printk("Read2 R: %d W: %d\n", num_of_readers, num_of_writers);
 	if(enc_num_of_writers == 0 && available_data_Buff(my_buff2) == 0)
 		return 0;
+	//printk("readers_queue_enc = %d\n", readers_queue_enc.count);
 	if(down_interruptible(&readers_queue_enc) != 0)
 		return -EINTR;
-	if(enc_num_of_writers == 0 && available_data_Buff(my_buff2) == 0){
-		up(&readers_queue_enc);
-		return 0;
+	if(available_data_Buff(my_buff2) == 0){
+		if(enc_num_of_writers == 0){
+			up(&readers_queue_enc);
+			return 0;
+		} 
+		else if(down_interruptible(&readers_queue_enc) != 0)
+			return -EINTR;
 	}
 	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
 	// 	return 0;
