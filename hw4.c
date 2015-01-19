@@ -104,7 +104,6 @@ int init_module( void ) {
 	if( my_major < 0 ) {
 		return my_major;
 	}
-	//printk("Major: %d\n",my_major); // TODO Remove bleaaaat
 	//do_init();
 	init_MUTEX(&writers_queue_dec);    /* binary semaphore */
 	init_MUTEX(&readers_queue_dec);    /* binary semaphore */
@@ -139,7 +138,7 @@ int my_open( struct inode *inode, struct file *filp ) {
 	int minor = MINOR(inode->i_rdev); 
 	if(minor != 1 && minor != 0)
 		return -EINVAL;
-	//if(filp->private_data == NULL){
+
 	filp->private_data = kmalloc(sizeof(int),GFP_KERNEL);
 		*((int*)(filp->private_data)) = iKey;
 
@@ -148,19 +147,6 @@ int my_open( struct inode *inode, struct file *filp ) {
 		minor == 1 ? enc_num_of_readers++ : dec_num_of_readers++ ;
 	if( filp->f_mode & FMODE_WRITE )
 		minor == 1 ? enc_num_of_writers++ : dec_num_of_writers++ ;
-	// else if(filp->f_mode & O_RDWR){
-	// 	num_of_writers++;
-	// 	num_of_readers++;
-	// }
-	//printk("Opened. R: %d, W: %d\n", num_of_readers, num_of_writers);
-
-    //printk("Open--> readers: %d , writers: %d\n",num_of_readers,num_of_writers);
-	//MOD_INC_USE_COUNT; 
-	/*no need in 2.4 or later*/
-
-	// if( filp->f_flags & O_NONBLOCK ) {
- //                //example of additional flag
-	// }
 
 	if (minor == 1){
         filp->f_op = &my_fops2;
@@ -204,15 +190,8 @@ int my_release(struct inode *inode, struct file *filp ) {
 		down_trylock(q_write);
 		up(q_write);
 	}
-	// else if(filp->f_mode & O_RDWR){
-	// 	num_of_writers--;
-	// 	num_of_readers--;
-	// }
-	//printk("Released. R: %d, W: %d\n", num_of_readers, num_of_writers);
 
 	kfree(filp->private_data);
-	//printk("Close--> readers: %d , writers: %d\n",num_of_readers,num_of_writers);
-	//MOD_DEC_USE_COUNT; /*no need in 2.4 or later*/
 
 	return 0;
 }
@@ -224,7 +203,6 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 	if(count % 8 != 0)
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff);
-	//printk("Read R: %d W: %d\n", num_of_readers, num_of_writers);
 	if(dec_num_of_writers == 0 && available_data_Buff(my_buff) == 0)
 		return 0;
 	if(down_interruptible(&readers_queue_dec) != 0)
@@ -237,8 +215,7 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 		else if(down_interruptible(&readers_queue_dec) != 0)
 		return -EINTR; 
 	}
-	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
-	// 	return 0;
+
 	int data_read = 0;
 	char* tmp_buff = NULL;
 	char* decrypted_data = NULL;
@@ -268,25 +245,26 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 
 
 ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos) {  /* decryptor */
-    //copy the data from user
-	//write the data
-    // return the ammount of written data
+
 	if(filp->f_mode & FMODE_READ && !(filp->f_mode & FMODE_WRITE))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
-	//printk("Write R: %d W: %d\n", num_of_readers, num_of_writers);
+
 	int available_data_on_start = available_data_Buff(my_buff);
 	if(dec_num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
 	if(down_interruptible(&writers_queue_dec) != 0)
 		return -EINTR;
-	if(dec_num_of_readers == 0 && available_space_Buff(my_buff) == 0){
-		up(&writers_queue_dec);
-		return 0;
-	}
-	// if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
-	// 	return 0;
+	if(available_space_Buff(my_buff) == 0){
+		if(dec_num_of_readers == 0){
+			up(&writers_queue_dec);
+			return 0;
+		}	
+		else if(down_interruptible(&writers_queue_dec) != 0)
+			return -EINTR;
+		}
+
 	char* tmp_buff = NULL;
 	int data_writen = 0;
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
@@ -308,18 +286,14 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
 
 
 ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { /* encryptor */
-	//read the data
-	//copy the data to user
-    //return the ammount of read data
+
 	if(filp->f_mode & FMODE_WRITE && !(filp->f_mode & FMODE_READ))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff2);
-	//printk("Read2 R: %d W: %d\n", num_of_readers, num_of_writers);
 	if(enc_num_of_writers == 0 && available_data_Buff(my_buff2) == 0)
 		return 0;
-	//printk("readers_queue_enc = %d\n", readers_queue_enc.count);
 	if(down_interruptible(&readers_queue_enc) != 0)
 		return -EINTR;
 	if(available_data_Buff(my_buff2) == 0){
@@ -330,8 +304,6 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 		else if(down_interruptible(&readers_queue_enc) != 0)
 			return -EINTR;
 	}
-	// if(!(filp->f_mode & FMODE_WRITE) && available_data_Buff(my_buff) == 0)
-	// 	return 0;
 	char* tmp_buff = NULL;
 	int data_read = 0;
 	tmp_buff = kmalloc(sizeof(char)*count,GFP_KERNEL);
@@ -353,25 +325,23 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 
 
 ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_pos) { /* encryptor */
-        //copy the data from user
-	//write the data
-    //return the ammount of written data
 	if(filp->f_mode & FMODE_READ && !(filp->f_mode & FMODE_WRITE))
 		return -EINVAL;
 	if(count % 8 != 0)
 		return -EINVAL;
-	//printk("Write2 R: %d W: %d\n", num_of_readers, num_of_writers);
 	int available_data_on_start = available_data_Buff(my_buff2);
 	if(enc_num_of_readers == 0 && available_space_Buff(my_buff2) == 0)
 		return 0;
 	if(down_interruptible(&writers_queue_enc) != 0)
 		return -EINTR;
-	if(enc_num_of_readers == 0 && available_space_Buff(my_buff2) == 0){
-		up(&writers_queue_enc);
-		return 0;
+	if(available_space_Buff(my_buff2) == 0){
+		if(enc_num_of_readers == 0){
+			up(&writers_queue_enc);
+			return 0;
+		}
+		else if(down_interruptible(&writers_queue_enc) != 0)
+			return -EINTR;
 	}
-	// if(!(filp->f_mode & FMODE_READ) && available_space_Buff(my_buff) == 0)
-	// 	return 0;
 	int data_writen = 0;
 	char* tmp_buff = NULL;
 	char* encrypted_data = NULL;
