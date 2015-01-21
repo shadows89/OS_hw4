@@ -204,16 +204,16 @@ ssize_t my_read( struct file *filp, char *buf, size_t count, loff_t *f_pos ) {  
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff);
 	if(dec_num_of_writers == 0 && available_data_Buff(my_buff) == 0)
-		return 0;
+	 	return 0;
 	if(down_interruptible(&readers_queue_dec) != 0)
-		return -EINTR;
-	if(available_data_Buff(my_buff) == 0){
+	 	return -EINTR;
+	while(available_data_Buff(my_buff) == 0){
 		if(dec_num_of_writers == 0){
 			up(&readers_queue_dec);
 			return 0;
 		}
 		else if(down_interruptible(&readers_queue_dec) != 0)
-		return -EINTR; 
+			return -EINTR; 
 	}
 
 	int data_read = 0;
@@ -255,8 +255,8 @@ ssize_t my_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos
 	if(dec_num_of_readers == 0 && available_space_Buff(my_buff) == 0)
 		return 0;
 	if(down_interruptible(&writers_queue_dec) != 0)
-		return -EINTR;
-	if(available_space_Buff(my_buff) == 0){
+	 	return -EINTR;
+	while(available_space_Buff(my_buff) == 0){
 		if(dec_num_of_readers == 0){
 			up(&writers_queue_dec);
 			return 0;
@@ -292,11 +292,11 @@ ssize_t my_read2( struct file *filp, char *buf, size_t count, loff_t *f_pos ) { 
 	if(count % 8 != 0)
 		return -EINVAL;
 	int available_space_on_start = available_space_Buff(my_buff2);
-	if(enc_num_of_writers == 0 && available_data_Buff(my_buff2) == 0)
-		return 0;
+	 if(enc_num_of_writers == 0 && available_data_Buff(my_buff2) == 0)
+	 	return 0;
 	if(down_interruptible(&readers_queue_enc) != 0)
 		return -EINTR;
-	if(available_data_Buff(my_buff2) == 0){
+	while(available_data_Buff(my_buff2) == 0){
 		if(enc_num_of_writers == 0){
 			up(&readers_queue_enc);
 			return 0;
@@ -334,7 +334,7 @@ ssize_t my_write2(struct file *filp, const char *buf, size_t count, loff_t *f_po
 		return 0;
 	if(down_interruptible(&writers_queue_enc) != 0)
 		return -EINTR;
-	if(available_space_Buff(my_buff2) == 0){
+	while(available_space_Buff(my_buff2) == 0){
 		if(enc_num_of_readers == 0){
 			up(&writers_queue_enc);
 			return 0;
